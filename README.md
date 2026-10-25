@@ -1,17 +1,17 @@
-# Projektbeschreibung
+# Project Description
 
-Unter NixOS kann man nicht einfach eine Binary in `/usr/local/bin` ablegen, um sie global verfügbar zu machen. Deshalb habe ich dieses Tool geschrieben. 
+On NixOS you cannot just put a binary in `/usr/local/bin` to make it available everywhere. That is why I made this tool.
 
-Alternativ besteht immer die Möglichkeit, die Binary aus dem Quellcode zu kompilieren, etwa mit einem Makefile, über Rust/Cargo oder aus einzelnen kleinen C-Dateien, die ein eigenständiges Programm bilden.
+Another option is to always build the binary from source code. You can do this with a Makefile, with Rust/Cargo, or from small C files that make a full program.
 
-Das Automatisierungs-Tool für NixOS, führt folgende Schritte aus:
+This automation tool does these steps:
 
-- Kompilierung: Lokale Systemprogramme werden automatisiert gebaut. 
-- Paketierung: Das Tool schreibt die passenden Build-Anweisungen für den Paketmanager.
-- Deployment: Es wird ein neuer Systemzustand erzeugt.
-- Nach dem build in den Systemzustand werden die temporären Kompilate gelöscht.
+- **Compile**: It automatically builds local system programs.
+- **Package**: The tool writes the right build instructions for the package manager.
+- **Deploy**: It creates a new system state.
+- After the build goes into the system state, it deletes the temporary compiled files.
 
-Root wird nicht zum Kompilieren verwendet, dies findet in einen fork Prozess als Dev-User statt.
+It does not use root to compile. Compiling happens in a forked process as a normal dev user.
 
 # Includes
 
@@ -29,4 +29,4 @@ make test
 
 # Tests
 
-Es gibt umfassende Tests für die Generierung der Config-Dateien und Pfade. Damit wird sichergestellt, dass Konfigurationen und Verzeichnisstrukturen korrekt und reproduzierbar erzeugt werden. Das Programm wurde zusätzlich unter realen Bedingungen getestet, um das Verhalten in praxisnahen Deployment-Szenarien zu verifizieren. Manuelles Ownership wurde eingehalten.
+There are many tests for creating config files and paths. These tests make sure that configs and folder structures are made correctly and can be repeated the same way every time. The program was also tested in real situations to check how it works in normal deployment cases. Manual ownership rules were followed.
