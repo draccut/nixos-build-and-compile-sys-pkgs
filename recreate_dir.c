@@ -2,6 +2,8 @@
 
 #define _XOPEN_SOURCE 500
 
+#include "config_root_paths.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +11,17 @@
 #include <sys/stat.h>
 #include <ftw.h>
 #include <errno.h>
+
+int check_binery_exists(const char *bin_file_path)
+{
+    FILE *file = fopen(bin_file_path, "r");
+    if (file) {
+        fclose(file);
+        return 0;
+    } else {
+        return 1;
+    }
+}
 
 static int remove_cb(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
 {
@@ -29,8 +42,8 @@ static int remove_directory(const char *path)
 
 int recreate_dir()
 {
-    char dir[sizeof(PKG_ROOT_FOLDERNAME)];
-    strncpy(dir, PKG_ROOT_FOLDERNAME, sizeof(dir));
+    char dir[sizeof(PKG_ROOT)];
+    strncpy(dir, PKG_ROOT, sizeof(dir));
     struct stat st;
     if (stat(dir, &st) != 0) {
         if (errno == ENOENT) {

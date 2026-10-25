@@ -273,7 +273,7 @@ static void test_build_default_nix(void)
     char *expected;
     size_t len;
     int init_rc;
-    init_rc = init_program(&prog, "TEST_C_BINERY_1");
+    init_rc = init_program(&prog, "TEST_C_BINERY_1", 0);
     actual = build_default_nix(prog.name);
     expected =
     "{ pkgs ? import <nixpkgs> {} }:\n"
@@ -320,7 +320,7 @@ static void test_build_default_nix_rust_name(void)
     char *expected;
     size_t len;
     int init_rc;
-    init_rc = init_program(&prog, "TEST_RUST_BINERY_1");
+    init_rc = init_program(&prog, "TEST_RUST_BINERY_1", 0);
     actual = build_default_nix(prog.name);
     expected =
     "{ pkgs ? import <nixpkgs> {} }:\n"

@@ -107,6 +107,29 @@ static int run_command_as(char *const argv[], const char *username)
     return -1;
 }
 
+static int build_make(const char *project_dir)
+{
+    char *const argv[] = {
+        "make",
+        "-C", (char *)project_dir,
+        NULL
+    };
+    printf("Baue Make-Projekt...\n");
+    return run_command_as(argv, NAME_DEV_USER);
+}
+
+static int clean_make(const char *project_dir)
+{
+    char *const argv[] = {
+        "make",
+        "-C", (char *)project_dir,
+        "clean",
+        NULL
+    };
+    printf("Bereinige Make-Projekt (make clean)...\n");
+    return run_command_as(argv, NAME_DEV_USER);
+}
+
 #endif
 
 /**
@@ -207,6 +230,8 @@ static int clean_rust(const char *project_dir)
     #endif
 }
 
+#ifndef _TEST_BUILD
+
 /**
  * Löscht eine Datei sicher
  * Keine Fehlermeldung wenn Datei nicht existiert
@@ -242,8 +267,6 @@ static void copy_rust_binery(const char *rust_binery_path, const char *project_d
     copy_binary_file(new_bin_path, rust_binery_path);
 }
 
-#ifndef _TEST_BUILD
-
 /**
  * Kompiliert Projekt basierend auf Programmiersprache
  * Legt Binärdatei im Projektverzeichnis ab
@@ -275,6 +298,13 @@ int run_compile_commands(const char *binery_name, const char *project_dir, const
             return 1;
         }
     }
+    if (lang_id == ID_MAKE) {
+        clean_make(project_dir);
+        if (build_make(project_dir) != 0) {
+            fprintf(stderr, "make-Build fehlgeschlagen\n");
+            return 1;
+        }
+    }
     printf("kompilierung erfolgreich: %s\nIn Projektverzeichnis: %s\n", binery_name, project_dir);
     return 0;
 }
@@ -300,6 +330,9 @@ int clear_compile_commands(const char *binery_name, const char *project_dir, con
     }
     if (lang_id == ID_C_LANG) {
         delete_binery_file(binery_path);
+    }
+    if (lang_id == ID_MAKE) {
+        clean_make(project_dir);
     }
     printf("CleanUp erfolgreich: %s\nIn Projektverzeichnis: %s\n", binery_name, project_dir);
     return 0;

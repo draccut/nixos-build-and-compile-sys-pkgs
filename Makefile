@@ -14,7 +14,7 @@ LDFLAGS = -pie -Wl,-z,relro,-z,now -Wl,-z,noexecstack
 TARGET = NIXOS_DEPLOYMENT
 TEST_TARGET = NIXOS_DEPLOYMENT_TEST
 
-SRC = filesystem_operations.c config_paths.c compile_projects.c deploy_pkgs.c recreate_dir.c main.c
+SRC = config_parser.c filesystem_operations.c config_paths.c compile_projects.c deploy_pkgs.c recreate_dir.c main.c
 OBJ = $(SRC:.c=.o)
 
 .PHONY: all test clean
@@ -30,6 +30,7 @@ $(TARGET): $(OBJ)
 # Testversion mit -D_TEST_BUILD
 test: CFLAGS += -D_TEST_BUILD
 test: $(TEST_TARGET)
+	./$(TEST_TARGET)
 
 $(TEST_TARGET): $(SRC)
 	$(CC) $(CFLAGS) -o $@ $(SRC) $(LDFLAGS)

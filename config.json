@@ -1,0 +1,22 @@
+[
+    {
+        "lang": "rust",
+        "source": "/dat/src/LLL",
+        "command": "LLL"
+    },
+    {
+        "lang": "c_file",
+        "source": "/dat/src/REP",
+        "command": "REP"
+    },
+    {
+        "lang": "make",
+        "source": "/dat/src/AES256",
+        "command": "AES256"
+    },
+    {
+        "lang": "binery",
+        "source": "/usr/local/bin/A_EXECUTABLE_BINERY",
+        "command": "EXE_BINERY"
+    }
+]

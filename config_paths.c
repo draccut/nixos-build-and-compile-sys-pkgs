@@ -1,6 +1,40 @@
 #include "config_paths.h"
 
-int init_program(SystemProgrammStruct *prog, const char *name)
+#ifndef _TEST_BUILD
+
+/* Produktions-Build: leer, wird zur Laufzeit gefüllt */
+char **SRC_PROJECT_PATH = NULL;
+int   *LANG_IDS         = NULL;
+char **PKG_NAMES        = NULL;
+size_t NROF             = 0;
+size_t LANG_IDS_LEN     = 0;
+
+#else
+
+/* Test-Build: feste Datensätze, genau eine Instanz für alle Module */
+static char *pkg_names_data[] = {
+    "TEST_RUST_BINERY_1",
+    "TEST_C_BINERY_1",
+    "AAAAAAAAAAA",
+    "BBBBBBBBBBBB",
+};
+
+static char *src_project_path_data[] = {
+    "/tmp/home/draccut/dev/TEST_RUST_BINERY_1",
+    "/tmp/home/draccut/dev/TEST_C_BINERY_1",
+    "/tmp/home/draccut/dev/AAAAAAAAAAA",
+    "/tmp/home/draccut/dev/BBBBBBBBBBBB",
+};
+
+char **SRC_PROJECT_PATH = src_project_path_data;
+char **PKG_NAMES        = pkg_names_data;
+size_t NROF             = 4;
+
+#endif
+
+static int resolve_src_binary(const char *name, char *out, size_t out_sz, size_t index);
+
+int init_program(SystemProgrammStruct *prog, const char *name, size_t index)
 {
     char bin_path[0x20ff];
     char nix_path[0x20ff];
@@ -13,7 +47,7 @@ int init_program(SystemProgrammStruct *prog, const char *name)
     snprintf(pkg_dir, sizeof(pkg_dir), "%s/%s", PKG_ROOT, name);
     prog->path_pkg_dir = strdup(pkg_dir);
     if (prog->path_pkg_dir == NULL) return -1;
-    if (resolve_src_binary(name, src_path, sizeof(src_path)) != 0) return -1;
+    if (resolve_src_binary(name, src_path, sizeof(src_path), index) != 0) return -1;
     prog->path_binery_in_src = strdup(src_path);
     if (prog->path_binery_in_src == NULL) return -1;
     snprintf(bin_path, sizeof(bin_path), "%s/%s", pkg_dir, name);
@@ -39,12 +73,12 @@ void free_program(SystemProgrammStruct *prog)
 int check_all_binerys_exists()
 {
     for (size_t i = 0; i < NROF; ++i) {
-        size_t path_length = strlen(SRC_ROOT) + (strlen(PKG_NAMES[i]) * 2) + 3;
+        size_t path_length = strlen(SRC_PROJECT_PATH[i]) + strlen(PKG_NAMES[i]) + 2;
         char* full_path = malloc(path_length);
         if (full_path == NULL) {
             return 0;
         }
-        snprintf(full_path, path_length, "%s/%s/%s", SRC_ROOT, PKG_NAMES[i], PKG_NAMES[i]);
+        snprintf(full_path, path_length, "%s/%s", SRC_PROJECT_PATH[i], PKG_NAMES[i]);
         if (!(check_file_exists(full_path))) {
             printf("FEHLER: %s existiert nicht\n", full_path);
             free(full_path);
@@ -119,30 +153,27 @@ int file_is_regular(const char *path)
     return S_ISREG(st.st_mode);
 }
 
-/**
- * Quell-Binary finden:
- *   1) /dat/src/<name>/<name>
- *   2) /dat/src/<name>
- */
-int resolve_src_binary(const char *name, char *out, size_t out_sz)
+static int resolve_src_binary(const char *name, char *out, size_t out_sz, size_t index)
 {
     if (name == NULL || out == NULL || out_sz == 0) return -1;
-    snprintf(out, out_sz, "%s/%s/%s", SRC_ROOT, name, name);
+    snprintf(out, out_sz, "%s/%s/%s", SRC_PROJECT_PATH[index], name, name);
     if (file_is_regular(out)) return 0;
-    snprintf(out, out_sz, "%s/%s", SRC_ROOT, name);
+    snprintf(out, out_sz, "%s/%s", SRC_PROJECT_PATH[index], name);
     if (file_is_regular(out)) return 0;
     #ifndef _TEST_BUILD
     fprintf(stderr,
             "Quelle nicht gefunden für '%s'. Gesucht:\n"
             "  %s/%s/%s\n"
             "  %s/%s\n",
-            name, SRC_ROOT, name, name, SRC_ROOT, name);
+            name, SRC_PROJECT_PATH[index], name, name, SRC_PROJECT_PATH[index], name);
     #endif
     return -1;
 }
 
 
 #ifdef _TEST_BUILD
+
+#define SRC_ROOT "/tmp/home/draccut/dev"
 
 static void test_free_program_clears_struct(void)
 {
@@ -344,5 +375,7 @@ void run_tests_config_paths(void)
     test_replace_shorter_new();
     test_replace_at_boundaries();
 }
+
+#undef SRC_ROOT
 
 #endif

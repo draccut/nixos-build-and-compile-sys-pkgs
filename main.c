@@ -1,12 +1,15 @@
 #include "deploy_pkgs.h"
 #include "recreate_dir.h"
 #include "compile_projects.h"
+#include "config_parser.h"
+
+#ifndef _TEST_BUILD
 
 static int start_deployment_prozess(void) 
 {
     if (check_all_binerys_exists() == 1) {
         printf("Fehlende Datein\n");
-        return 0;
+        return 1;
     } else {
         printf("Alle Binerys vorhanden\n");
     }
@@ -23,7 +26,7 @@ static int start_deployment_prozess(void)
         fprintf(stderr, "Warnung: nicht root. Schreiben nach %s schlägt oft fehl.\n", PKG_ROOT);
     }
     for (i = 0; i < NROF; i++) {
-        if (init_program(&progs[i], PKG_NAMES[i]) != 0) {
+        if (init_program(&progs[i], PKG_NAMES[i], i) != 0) {
             fprintf(stderr, "init_program failed for %s\n", PKG_NAMES[i]);
             errors++;
         }
@@ -63,10 +66,12 @@ static int start_deployment_prozess(void)
     return 0;
 }
 
-static int start_compile_prozess_c(const char *project_name, char *src_file_path, char *project_path)
+#endif
+
+static int start_compile_prozess_c(const char *project_name, char *src_file_path, char *project_path, size_t index)
 {
-    snprintf(src_file_path, 0x1000, "%s/%s/%s.c", SRC_ROOT, project_name, project_name);
-    snprintf(project_path, 0x1000, "%s/%s", SRC_ROOT, project_name);
+    snprintf(src_file_path, 0x1000, "%s/%s.c", SRC_PROJECT_PATH[index], project_name);
+    snprintf(project_path, 0x1000, "%s", SRC_PROJECT_PATH[index]);
     if (check_file_exists(src_file_path)) {
         int ret = run_compile_commands(project_name, project_path, ID_C_LANG);
         return ret;
@@ -74,10 +79,10 @@ static int start_compile_prozess_c(const char *project_name, char *src_file_path
     return 0;
 }
 
-static int start_compile_prozess_rust(const char *project_name, char *src_file_path, char *project_path)
+static int start_compile_prozess_rust(const char *project_name, char *src_file_path, char *project_path, size_t index)
 {
-    snprintf(project_path, 0x1000, "%s/%s", SRC_ROOT, project_name);
-    snprintf(src_file_path, 0x1000, "%s/%s/Cargo.toml", SRC_ROOT, project_name);
+    snprintf(project_path, 0x1000, "%s", SRC_PROJECT_PATH[index]);
+    snprintf(src_file_path, 0x1000, "%s/Cargo.toml", SRC_PROJECT_PATH[index]);
     if (check_file_exists(src_file_path)) {
         int ret = run_compile_commands(project_name, project_path, ID_RUST_LANG);
         return ret;
@@ -85,10 +90,10 @@ static int start_compile_prozess_rust(const char *project_name, char *src_file_p
     return 0;
 }
 
-static int clear_compile_prozess_c(const char *project_name, char *bin_file_path, char *project_path)
+static int clear_compile_prozess_c(const char *project_name, char *bin_file_path, char *project_path, size_t index)
 {
-    snprintf(bin_file_path, 0x1000, "%s/%s/%s", SRC_ROOT, project_name, project_name);
-    snprintf(project_path, 0x1000, "%s/%s", SRC_ROOT, project_name);
+    snprintf(bin_file_path, 0x1000, "%s/%s", SRC_PROJECT_PATH[index], project_name);
+    snprintf(project_path, 0x1000, "%s", SRC_PROJECT_PATH[index]);
     if (check_file_exists(bin_file_path)) {
         int ret = clear_compile_commands(project_name, project_path, ID_C_LANG);
         return ret;
@@ -96,24 +101,15 @@ static int clear_compile_prozess_c(const char *project_name, char *bin_file_path
     return 0;
 }
 
-static int clear_compile_prozess_rust(const char *project_name, char *bin_file_path, char *project_path)
+static int clear_compile_prozess_rust(const char *project_name, char *bin_file_path, char *project_path, size_t index)
 {
-    snprintf(project_path, 0x1000, "%s/%s", SRC_ROOT, project_name);
-    snprintf(bin_file_path, 0x1000, "%s/%s/target/release/%s", SRC_ROOT, project_name, project_name);
+    snprintf(project_path, 0x1000, "%s", SRC_PROJECT_PATH[index]);
+    snprintf(bin_file_path, 0x1000, "%s/target/release/%s", SRC_PROJECT_PATH[index], project_name);
     if (check_file_exists(bin_file_path)) {
         int ret = clear_compile_commands(project_name, project_path, ID_RUST_LANG);
         return ret;
     }
     return 0;
-}
-
-/**
- * Führt den Befehl "nixos-rebuild switch" aus.
- * Gibt den Exit-Status des Befehls zurück.
- */
-static int nixos_rebuild_switch(void) 
-{
-    return system("nixos-rebuild switch");
 }
 
 static int sum_ret(size_t len, int *ret)
@@ -127,9 +123,82 @@ static int sum_ret(size_t len, int *ret)
 
 #ifndef _TEST_BUILD
 
+/**
+ * Führt den Befehl "nixos-rebuild switch" aus.
+ * Gibt den Exit-Status des Befehls zurück.
+ */
+static int nixos_rebuild_switch(void)
+{
+    return system("nixos-rebuild switch");
+}
+
+static void print_config_vector(const ConfigVector *vec)
+{
+    if (!vec) {
+        printf("(ConfigVector is NULL)\n");
+        return;
+    }
+    printf("ConfigVector: %zu Einträge\n", vec->count);
+    printf("----------------------------------------\n");
+    for (size_t i = 0; i < vec->count; i++) {
+        const ConfigEntry *e = &vec->entries[i];
+        printf("[%zu]\n", i);
+        printf("  lang:    %s\n", e->lang);
+        printf("  source:  %s\n", e->source);
+        printf("  command: %s\n", e->command);
+    }
+    printf("----------------------------------------\n");
+}
+
+static int fill_up_global_vectors(const ConfigVector *vec)
+{
+    if (!vec) {
+        printf("(ConfigVector is NULL)\n");
+        return 1;
+    }
+    NROF = vec->count;
+    LANG_IDS_LEN = vec->count;
+    LANG_IDS = malloc(vec->count * sizeof(int));
+    PKG_NAMES = malloc(vec->count * sizeof(char *));
+    SRC_PROJECT_PATH = malloc(vec->count * sizeof(char *));
+    for (size_t i = 0; i < vec->count; i++) {
+        const ConfigEntry *e = &vec->entries[i];
+        if (strcmp(e->lang, LANG_C_FILE) == 0) {
+            LANG_IDS[i] = ID_C_LANG;
+        } else if (strcmp(e->lang, LANG_MAKE) == 0) {
+            LANG_IDS[i] = ID_MAKE;
+        } else if (strcmp(e->lang, LANG_RUST) == 0) {
+            LANG_IDS[i] = ID_RUST_LANG;
+        } else if (strcmp(e->lang, LANG_BINERY) == 0) {
+            LANG_IDS[i] = ID_BINERY_FILE;
+        } else {
+            return 1;
+        }
+        PKG_NAMES[i] = strdup(e->command);
+        SRC_PROJECT_PATH[i] = strdup(e->source);
+    }
+    return 0;
+}
+
+static void free_global_vectors()
+{
+    for (size_t i = 0; i < NROF; i++) {
+        free(PKG_NAMES[i]);
+	free(SRC_PROJECT_PATH[i]);
+    }
+    free(PKG_NAMES);
+    free(SRC_PROJECT_PATH);
+    free(LANG_IDS);
+}
+
 int main(void)
 {
-    if (NROF != LANG_IDS_LEN) {
+    ConfigVector vec;
+    if (parse_config("config.json", &vec) == 0) {
+        print_config_vector(&vec);
+    }
+    int res_fugv = fill_up_global_vectors(&vec);
+    if (res_fugv != 0) {
         return 1;
     }
     int *ret = malloc((NROF * 2 + 2) * sizeof(int));
@@ -144,15 +213,22 @@ int main(void)
             return 1;
         }
         if (LANG_IDS[index] == ID_C_LANG) {
-            ret[index_ret] = start_compile_prozess_c(PKG_NAMES[index], sbuf1, sbuf2);
+            ret[index_ret] = start_compile_prozess_c(PKG_NAMES[index], sbuf1, sbuf2, index);
+        } else if (LANG_IDS[index] == ID_RUST_LANG) {
+            ret[index_ret] = start_compile_prozess_rust(PKG_NAMES[index], sbuf1, sbuf2, index);
         } else {
-            ret[index_ret] = start_compile_prozess_rust(PKG_NAMES[index], sbuf1, sbuf2);
+            char bin_file_path_check[0x1000];
+            snprintf(bin_file_path_check, sizeof(bin_file_path_check), "%s/%s", SRC_PROJECT_PATH[index], PKG_NAMES[index]);
+            ret[index_ret] = check_binery_exists(bin_file_path_check);
         }
         free(sbuf1);
         free(sbuf2);
         ++index_ret;
     }
     ret[index_ret] = start_deployment_prozess();
+    if (ret[index_ret] != 0) {
+        return 1;
+    }
     ++index_ret;
     ret[index_ret] = nixos_rebuild_switch();
     ++index_ret;
@@ -166,9 +242,11 @@ int main(void)
             return 1;
         }
         if (LANG_IDS[index] == ID_C_LANG) {
-            ret[index_ret] = clear_compile_prozess_c(PKG_NAMES[index], cbuf1, cbuf2);
+            ret[index_ret] = clear_compile_prozess_c(PKG_NAMES[index], cbuf1, cbuf2, index);
+        } else if (LANG_IDS[index] == ID_RUST_LANG) {
+            ret[index_ret] = clear_compile_prozess_rust(PKG_NAMES[index], cbuf1, cbuf2, index);
         } else {
-            ret[index_ret] = clear_compile_prozess_rust(PKG_NAMES[index], cbuf1, cbuf2);
+            ret[index_ret] = 0;
         }
         free(cbuf1);
         free(cbuf2);
@@ -176,11 +254,20 @@ int main(void)
     }
     int return_value = sum_ret(NROF * 2 + 2, ret);
     free(ret);
+    free_global_vectors();
     return return_value;
 }
 
 
 #else
+
+static void run_test_sum_ret(void)
+{
+    size_t len_list = 4;
+    int list[] = {1, 2, 3, 4};
+    int ret = sum_ret(len_list, list);
+    test_assert_eq_int(ret, 10, "sum_ret");
+}
 
 static void run_tests_start_compile_prozess_c(void)
 {
@@ -192,13 +279,13 @@ static void run_tests_start_compile_prozess_c(void)
         free(proj_path);
         return;
     }
-    int ret = start_compile_prozess_c("TEST_C_BINERY_1", src_path, proj_path);
+    int ret = start_compile_prozess_c("TEST_C_BINERY_1", src_path, proj_path, 1);
     test_assert_eq_int(ret, 0, "start_compile_prozess_c TEST_C_BINERY_1 ret");
     test_assert_eq_string(src_path, "/tmp/home/draccut/dev/TEST_C_BINERY_1/TEST_C_BINERY_1.c",
                           sizeof("/tmp/home/draccut/dev/TEST_C_BINERY_1/TEST_C_BINERY_1.c") - 1);
     test_assert_eq_string(proj_path, "/tmp/home/draccut/dev/TEST_C_BINERY_1",
                           sizeof("/tmp/home/draccut/dev/TEST_C_BINERY_1") - 1);
-    ret = start_compile_prozess_c("BBBBBBBBBBBB", src_path, proj_path);
+    ret = start_compile_prozess_c("BBBBBBBBBBBB", src_path, proj_path, 3);
     test_assert_eq_int(ret, 0, "start_compile_prozess_c BBBBBBBBBBBB ret");
     test_assert_eq_string(src_path, "/tmp/home/draccut/dev/BBBBBBBBBBBB/BBBBBBBBBBBB.c",
                           sizeof("/tmp/home/draccut/dev/BBBBBBBBBBBB/BBBBBBBBBBBB.c") - 1);
@@ -218,13 +305,13 @@ static void run_tests_start_compile_prozess_rust(void)
         free(proj_path);
         return;
     }
-    int ret = start_compile_prozess_rust("TEST_RUST_BINERY_1", src_path, proj_path);
+    int ret = start_compile_prozess_rust("TEST_RUST_BINERY_1", src_path, proj_path, 0);
     test_assert_eq_int(ret, 0, "start_compile_prozess_rust TEST_RUST_BINERY_1 ret");
     test_assert_eq_string(src_path, "/tmp/home/draccut/dev/TEST_RUST_BINERY_1/Cargo.toml",
                           sizeof("/tmp/home/draccut/dev/TEST_RUST_BINERY_1/Cargo.toml") - 1);
     test_assert_eq_string(proj_path, "/tmp/home/draccut/dev/TEST_RUST_BINERY_1",
                           sizeof("/tmp/home/draccut/dev/TEST_RUST_BINERY_1") - 1);
-    ret = start_compile_prozess_rust("AAAAAAAAAAA", src_path, proj_path);
+    ret = start_compile_prozess_rust("AAAAAAAAAAA", src_path, proj_path, 2);
     test_assert_eq_int(ret, 0, "start_compile_prozess_rust AAAAAAAAAAA ret");
     test_assert_eq_string(src_path, "/tmp/home/draccut/dev/AAAAAAAAAAA/Cargo.toml",
                           sizeof("/tmp/home/draccut/dev/AAAAAAAAAAA/Cargo.toml") - 1);
@@ -244,13 +331,13 @@ static void run_tests_clear_compile_prozess_c(void)
         free(proj_path);
         return;
     }
-    int ret = clear_compile_prozess_c("TEST_C_BINERY_1", bin_path, proj_path);
+    int ret = clear_compile_prozess_c("TEST_C_BINERY_1", bin_path, proj_path, 1);
     test_assert_eq_int(ret, 0, "clear_compile_prozess_c TEST_C_BINERY_1 ret");
     test_assert_eq_string(bin_path, "/tmp/home/draccut/dev/TEST_C_BINERY_1/TEST_C_BINERY_1",
                           sizeof("/tmp/home/draccut/dev/TEST_C_BINERY_1/TEST_C_BINERY_1") - 1);
     test_assert_eq_string(proj_path, "/tmp/home/draccut/dev/TEST_C_BINERY_1",
                           sizeof("/tmp/home/draccut/dev/TEST_C_BINERY_1") - 1);
-    ret = clear_compile_prozess_c("BBBBBBBBBBBB", bin_path, proj_path);
+    ret = clear_compile_prozess_c("BBBBBBBBBBBB", bin_path, proj_path, 3);
     test_assert_eq_int(ret, 0, "clear_compile_prozess_c BBBBBBBBBBBB ret");
     test_assert_eq_string(bin_path, "/tmp/home/draccut/dev/BBBBBBBBBBBB/BBBBBBBBBBBB",
                           sizeof("/tmp/home/draccut/dev/BBBBBBBBBBBB/BBBBBBBBBBBB") - 1);
@@ -270,13 +357,13 @@ static void run_tests_clear_compile_prozess_rust(void)
         free(proj_path);
         return;
     }
-    int ret = clear_compile_prozess_rust("TEST_RUST_BINERY_1", bin_path, proj_path);
+    int ret = clear_compile_prozess_rust("TEST_RUST_BINERY_1", bin_path, proj_path, 0);
     test_assert_eq_int(ret, 0, "clear_compile_prozess_rust TEST_RUST_BINERY_1 ret");
     test_assert_eq_string(bin_path, "/tmp/home/draccut/dev/TEST_RUST_BINERY_1/target/release/TEST_RUST_BINERY_1",
                           sizeof("/tmp/home/draccut/dev/TEST_RUST_BINERY_1/target/release/TEST_RUST_BINERY_1") - 1);
     test_assert_eq_string(proj_path, "/tmp/home/draccut/dev/TEST_RUST_BINERY_1",
                           sizeof("/tmp/home/draccut/dev/TEST_RUST_BINERY_1") - 1);
-    ret = clear_compile_prozess_rust("AAAAAAAAAAA", bin_path, proj_path);
+    ret = clear_compile_prozess_rust("AAAAAAAAAAA", bin_path, proj_path, 2);
     test_assert_eq_int(ret, 0, "clear_compile_prozess_rust AAAAAAAAAAA ret");
     test_assert_eq_string(bin_path, "/tmp/home/draccut/dev/AAAAAAAAAAA/target/release/AAAAAAAAAAA",
                           sizeof("/tmp/home/draccut/dev/AAAAAAAAAAA/target/release/AAAAAAAAAAA") - 1);
@@ -302,8 +389,11 @@ int main(void)
     run_tests_config_paths();
     run_tests_deploy_pkgs();
     run_tests_start_clear_compile_prozess();
+    run_tests_parse_config_json();
     print_test_summary();
+    run_test_sum_ret();
     return 0;
 }
 
 #endif
+
